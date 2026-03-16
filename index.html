@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="LabCalc">
+  <meta name="theme-color" content="#0c0a09">
+  <title>LabCalc</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    .lc-app {
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      background: #0c0a09;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+      color: #e7e5e4;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .lc-header {
+      background: #1c1917;
+      padding: 14px 20px;
+      padding-top: calc(14px + env(safe-area-inset-top, 0px));
+      border-bottom: 2px solid #22c55e;
+    }
+    .lc-header-inner {
+      max-width: 560px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      color: #22c55e;
+    }
+    .lc-header-title {
+      font-size: 19px;
+      font-weight: 700;
+      color: #fafaf9;
+      letter-spacing: -0.04em;
+    }
+
+    .lc-nav {
+      background: #1c1917;
+      border-bottom: 1px solid #292524;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      max-width: 560px;
+      width: 100%;
+      margin: 0 auto;
+    }
+    .lc-tab {
+      flex: 1;
+      padding: 12px 2px;
+      border: none;
+      border-bottom: 2px solid transparent;
+      background: none;
+      cursor: pointer;
+      font-size: 11.5px;
+      font-weight: 500;
+      color: #57534e;
+      font-family: inherit;
+      text-align: center;
+      transition: color 0.12s;
+      letter-spacing: -0.01em;
+    }
+    .lc-tab:hover { color: #a8a29e; }
+    .lc-tab-active {
+      color: #4ade80 !important;
+      font-weight: 600;
+      border-bottom-color: #22c55e;
+    }
+    .lc-tab-short { display: none; }
+
+    @media (max-width: 520px) {
+      .lc-tab-full { display: none; }
+      .lc-tab-short { display: inline; }
+      .lc-tab { font-size: 12px; }
+      .lc-nav { padding: 0 4px; }
+    }
+
+    .lc-main {
+      flex: 1;
+      max-width: 560px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 20px 16px;
+    }
+
+    .lc-card {
+      background: #1c1917;
+      border-radius: 10px;
+      padding: 24px 22px;
+      border: 1px solid #292524;
+    }
+    .lc-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+    .lc-card-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #fafaf9;
+      letter-spacing: -0.03em;
+    }
+    .lc-clear-btn {
+      padding: 5px 14px;
+      border: 1px solid #44403c;
+      border-radius: 6px;
+      background: #292524;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      color: #a8a29e;
+      font-family: inherit;
+      transition: background 0.1s;
+    }
+    .lc-clear-btn:hover { background: #44403c; }
+
+    .lc-formula {
+      margin: 0 0 20px 0;
+      font-size: 12px;
+      color: #57534e;
+      font-family: "Geist Mono", "SF Mono", ui-monospace, monospace;
+      font-weight: 400;
+    }
+
+    .lc-input-row { margin-bottom: 16px; }
+    .lc-label {
+      display: block;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: #a8a29e;
+      margin-bottom: 5px;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+    .lc-input-group { display: flex; gap: 8px; }
+    .lc-input {
+      flex: 1;
+      padding: 10px 12px;
+      border: 1.5px solid #44403c;
+      border-radius: 8px;
+      font-size: 16px;
+      font-family: "Geist Mono", "SF Mono", ui-monospace, monospace;
+      font-weight: 500;
+      color: #fafaf9;
+      background: #0c0a09;
+      outline: none;
+      transition: border-color 0.12s;
+      min-width: 0;
+    }
+    .lc-input:focus { border-color: #22c55e; }
+    .lc-input::placeholder { color: #44403c; }
+
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type=number] { -moz-appearance: textfield; }
+
+    .lc-select {
+      padding: 10px 8px;
+      border: 1.5px solid #44403c;
+      border-radius: 8px;
+      font-size: 13px;
+      font-family: inherit;
+      font-weight: 600;
+      color: #fafaf9;
+      background: #0c0a09;
+      cursor: pointer;
+      min-width: 72px;
+      outline: none;
+      transition: border-color 0.12s;
+    }
+    .lc-select:focus { border-color: #22c55e; }
+
+    .lc-unit-fixed {
+      display: flex;
+      align-items: center;
+      padding: 0 14px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #a8a29e;
+      background: #292524;
+      border: 1.5px solid #44403c;
+      border-radius: 8px;
+      white-space: nowrap;
+    }
+
+    .lc-result {
+      margin-top: 20px;
+      padding: 13px 16px;
+      background: rgba(34, 197, 94, 0.08);
+      border-radius: 8px;
+      border-left: 3px solid #22c55e;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .lc-result-label {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: #a8a29e;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+    .lc-result-value {
+      font-size: 16px;
+      font-weight: 600;
+      font-family: "Geist Mono", "SF Mono", ui-monospace, monospace;
+      color: #4ade80;
+    }
+
+    .lc-error {
+      margin-top: 20px;
+      padding: 12px 16px;
+      background: rgba(220, 38, 38, 0.1);
+      border-radius: 8px;
+      border-left: 3px solid #dc2626;
+      font-size: 13px;
+      color: #fca5a5;
+      font-weight: 500;
+    }
+
+    .lc-toggle-group {
+      display: flex;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1.5px solid #44403c;
+      width: fit-content;
+    }
+    .lc-toggle-active {
+      padding: 8px 22px;
+      border: none;
+      background: #22c55e;
+      color: #052e16;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .lc-toggle-inactive {
+      padding: 8px 22px;
+      border: none;
+      background: #1c1917;
+      color: #78716c;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .lc-toggle-inactive:hover { background: #292524; }
+
+    .lc-footer {
+      padding: 16px 20px;
+      padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+      text-align: center;
+      font-size: 11px;
+      color: #44403c;
+      border-top: 1px solid #292524;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script type="text/babel" data-type="module">
+    const { useState, useCallback } = React;
+
+    // Unit definitions
+    const CONC_MOLAR_UNITS = [
+      { label: "M", factor: 1 },
+      { label: "mM", factor: 1e-3 },
+      { label: "\u00b5M", factor: 1e-6 },
+      { label: "nM", factor: 1e-9 },
+      { label: "pM", factor: 1e-12 },
+    ];
+    const VOL_UNITS = [
+      { label: "L", factor: 1 },
+      { label: "mL", factor: 1e-3 },
+      { label: "\u00b5L", factor: 1e-6 },
+    ];
+    const MASS_UNITS = [
+      { label: "kg", factor: 1e3 },
+      { label: "g", factor: 1 },
+      { label: "mg", factor: 1e-3 },
+      { label: "\u00b5g", factor: 1e-6 },
+      { label: "ng", factor: 1e-9 },
+    ];
+    const CONC_MASS_VOL_UNITS = [
+      { label: "g/mL", factor: 1e3 },
+      { label: "mg/mL", factor: 1 },
+      { label: "\u00b5g/mL", factor: 1e-3 },
+      { label: "ng/mL", factor: 1e-6 },
+      { label: "pg/mL", factor: 1e-9 },
+      { label: "g/L", factor: 1 },
+      { label: "mg/L", factor: 1e-3 },
+      { label: "\u00b5g/L", factor: 1e-6 },
+    ];
+
+    function toBase(value, units, unitLabel) {
+      const u = units.find((u) => u.label === unitLabel);
+      return value * (u ? u.factor : 1);
+    }
+
+    function formatResult(valueInBaseUnit, units) {
+      let chosen = units[0];
+      for (const u of units) {
+        const v = Math.abs(valueInBaseUnit / u.factor);
+        if (v >= 0.01 && v < 10000) { chosen = u; break; }
+      }
+      const val = valueInBaseUnit / chosen.factor;
+      const formatted = Math.abs(val) >= 100 ? val.toFixed(1)
+        : Math.abs(val) >= 1 ? val.toFixed(3)
+        : Math.abs(val) >= 0.01 ? val.toFixed(5)
+        : val.toExponential(3);
+      return `${formatted} ${chosen.label}`;
+    }
+
+    // Reusable components
+    function InputRow({ label, value, onChange, unit, units, onUnitChange, placeholder }) {
+      return (
+        <div className="lc-input-row">
+          <label className="lc-label">{label}</label>
+          <div className="lc-input-group">
+            <input type="number" value={value} onChange={(e) => onChange(e.target.value)}
+              placeholder={placeholder || "0"} className="lc-input" step="any" />
+            {units ? (
+              <select value={unit} onChange={(e) => onUnitChange(e.target.value)} className="lc-select">
+                {units.map((u) => <option key={u.label} value={u.label}>{u.label}</option>)}
+              </select>
+            ) : (
+              <span className="lc-unit-fixed">{unit}</span>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    function ResultBox({ label, value }) {
+      return (
+        <div className="lc-result">
+          <span className="lc-result-label">{label}</span>
+          <span className="lc-result-value">{value || "\u2014"}</span>
+        </div>
+      );
+    }
+
+    function CalcCard({ title, children, onClear }) {
+      return (
+        <div className="lc-card">
+          <div className="lc-card-header">
+            <h2 className="lc-card-title">{title}</h2>
+            <button onClick={onClear} className="lc-clear-btn">Clear</button>
+          </div>
+          {children}
+        </div>
+      );
+    }
+
+    // Mass from Molarity
+    function MassFromMolarity() {
+      const [conc, setConc] = useState("");
+      const [concUnit, setConcUnit] = useState("mM");
+      const [mw, setMw] = useState("");
+      const [vol, setVol] = useState("");
+      const [volUnit, setVolUnit] = useState("mL");
+      const result = useCallback(() => {
+        const c = parseFloat(conc), m = parseFloat(mw), v = parseFloat(vol);
+        if (isNaN(c)||isNaN(m)||isNaN(v)||c<=0||m<=0||v<=0) return null;
+        return formatResult(toBase(c, CONC_MOLAR_UNITS, concUnit) * m * toBase(v, VOL_UNITS, volUnit), MASS_UNITS);
+      }, [conc, concUnit, mw, vol, volUnit]);
+      return (
+        <CalcCard title="Mass from Molarity" onClear={() => { setConc(""); setMw(""); setVol(""); }}>
+          <p className="lc-formula">mass = concentration × MW × volume</p>
+          <InputRow label="Concentration" value={conc} onChange={setConc} unit={concUnit} units={CONC_MOLAR_UNITS} onUnitChange={setConcUnit} />
+          <InputRow label="Molecular Weight" value={mw} onChange={setMw} unit="g/mol" />
+          <InputRow label="Volume" value={vol} onChange={setVol} unit={volUnit} units={VOL_UNITS} onUnitChange={setVolUnit} />
+          <ResultBox label="Required Mass" value={result()} />
+        </CalcCard>
+      );
+    }
+
+    // Molar Dilution
+    function MolarDilution() {
+      const [stockConc, setStockConc] = useState("");
+      const [stockUnit, setStockUnit] = useState("mM");
+      const [desiredConc, setDesiredConc] = useState("");
+      const [desiredUnit, setDesiredUnit] = useState("\u00b5M");
+      const [desiredVol, setDesiredVol] = useState("");
+      const [desiredVolUnit, setDesiredVolUnit] = useState("mL");
+      const result = useCallback(() => {
+        const c1 = parseFloat(stockConc), c2 = parseFloat(desiredConc), v2 = parseFloat(desiredVol);
+        if (isNaN(c1)||isNaN(c2)||isNaN(v2)||c1<=0||c2<=0||v2<=0) return null;
+        const c1b = toBase(c1, CONC_MOLAR_UNITS, stockUnit);
+        const c2b = toBase(c2, CONC_MOLAR_UNITS, desiredUnit);
+        const v2b = toBase(v2, VOL_UNITS, desiredVolUnit);
+        if (c2b > c1b) return { error: "Desired concentration exceeds stock" };
+        const v1b = (c2b * v2b) / c1b;
+        return { stock: formatResult(v1b, VOL_UNITS), diluent: formatResult(v2b - v1b, VOL_UNITS) };
+      }, [stockConc, stockUnit, desiredConc, desiredUnit, desiredVol, desiredVolUnit]);
+      const r = result();
+      return (
+        <CalcCard title="Molar Dilution (C1V1 = C2V2)" onClear={() => { setStockConc(""); setDesiredConc(""); setDesiredVol(""); }}>
+          <p className="lc-formula">V1 = (C2 × V2) / C1</p>
+          <InputRow label="Stock Concentration (C1)" value={stockConc} onChange={setStockConc} unit={stockUnit} units={CONC_MOLAR_UNITS} onUnitChange={setStockUnit} />
+          <InputRow label="Desired Concentration (C2)" value={desiredConc} onChange={setDesiredConc} unit={desiredUnit} units={CONC_MOLAR_UNITS} onUnitChange={setDesiredUnit} />
+          <InputRow label="Desired Final Volume (V2)" value={desiredVol} onChange={setDesiredVol} unit={desiredVolUnit} units={VOL_UNITS} onUnitChange={setDesiredVolUnit} />
+          {r && r.error ? <div className="lc-error">{r.error}</div> : (
+            <><ResultBox label="Volume of Stock (V1)" value={r?.stock} /><ResultBox label="Volume of Diluent" value={r?.diluent} /></>
+          )}
+        </CalcCard>
+      );
+    }
+
+    // Mass/Volume Dilution
+    function MassVolDilution() {
+      const [stockConc, setStockConc] = useState("");
+      const [stockUnit, setStockUnit] = useState("mg/mL");
+      const [finalConc, setFinalConc] = useState("");
+      const [finalUnit, setFinalUnit] = useState("\u00b5g/mL");
+      const [finalVol, setFinalVol] = useState("");
+      const [finalVolUnit, setFinalVolUnit] = useState("mL");
+      const result = useCallback(() => {
+        const c1 = parseFloat(stockConc), c2 = parseFloat(finalConc), v2 = parseFloat(finalVol);
+        if (isNaN(c1)||isNaN(c2)||isNaN(v2)||c1<=0||c2<=0||v2<=0) return null;
+        const c1b = toBase(c1, CONC_MASS_VOL_UNITS, stockUnit);
+        const c2b = toBase(c2, CONC_MASS_VOL_UNITS, finalUnit);
+        const v2b = toBase(v2, VOL_UNITS, finalVolUnit);
+        if (c2b > c1b) return { error: "Final concentration exceeds stock" };
+        const v1b = (c2b * v2b) / c1b;
+        return { stock: formatResult(v1b, VOL_UNITS), diluent: formatResult(v2b - v1b, VOL_UNITS) };
+      }, [stockConc, stockUnit, finalConc, finalUnit, finalVol, finalVolUnit]);
+      const r = result();
+      return (
+        <CalcCard title="Mass/Volume Dilution" onClear={() => { setStockConc(""); setFinalConc(""); setFinalVol(""); }}>
+          <p className="lc-formula">V1 = (C2 × V2) / C1</p>
+          <InputRow label="Stock Concentration (C1)" value={stockConc} onChange={setStockConc} unit={stockUnit} units={CONC_MASS_VOL_UNITS} onUnitChange={setStockUnit} />
+          <InputRow label="Final Concentration (C2)" value={finalConc} onChange={setFinalConc} unit={finalUnit} units={CONC_MASS_VOL_UNITS} onUnitChange={setFinalUnit} />
+          <InputRow label="Final Volume (V2)" value={finalVol} onChange={setFinalVol} unit={finalVolUnit} units={VOL_UNITS} onUnitChange={setFinalVolUnit} />
+          {r && r.error ? <div className="lc-error">{r.error}</div> : (
+            <><ResultBox label="Volume of Stock (V1)" value={r?.stock} /><ResultBox label="Volume of Diluent" value={r?.diluent} /></>
+          )}
+        </CalcCard>
+      );
+    }
+
+    // Reconstitution
+    function Reconstitution() {
+      const [mass, setMass] = useState("");
+      const [massUnit, setMassUnit] = useState("mg");
+      const [mw, setMw] = useState("");
+      const [desiredConc, setDesiredConc] = useState("");
+      const [concUnit, setConcUnit] = useState("mM");
+      const [concMode, setConcMode] = useState("molar");
+      const [massVolUnit, setMassVolUnit] = useState("mg/mL");
+      const result = useCallback(() => {
+        const m = parseFloat(mass), c = parseFloat(desiredConc);
+        if (isNaN(m)||isNaN(c)||m<=0||c<=0) return null;
+        if (concMode === "molar") {
+          const mwVal = parseFloat(mw);
+          if (isNaN(mwVal)||mwVal<=0) return null;
+          const massG = toBase(m, MASS_UNITS, massUnit);
+          return formatResult(massG / (toBase(c, CONC_MOLAR_UNITS, concUnit) * mwVal), VOL_UNITS);
+        } else {
+          const massG = toBase(m, MASS_UNITS, massUnit);
+          const concBase = toBase(c, CONC_MASS_VOL_UNITS, massVolUnit);
+          return formatResult(((massG * 1000) / concBase) * 1e-3, VOL_UNITS);
+        }
+      }, [mass, massUnit, mw, desiredConc, concUnit, concMode, massVolUnit]);
+      return (
+        <CalcCard title="Reconstitution" onClear={() => { setMass(""); setMw(""); setDesiredConc(""); }}>
+          <p className="lc-formula">volume = mass / (concentration × MW)</p>
+          <InputRow label="Mass of Compound" value={mass} onChange={setMass} unit={massUnit} units={MASS_UNITS} onUnitChange={setMassUnit} />
+          <div className="lc-input-row">
+            <label className="lc-label">Concentration Type</label>
+            <div className="lc-toggle-group">
+              <button className={concMode === "molar" ? "lc-toggle-active" : "lc-toggle-inactive"} onClick={() => setConcMode("molar")}>Molar</button>
+              <button className={concMode === "massVol" ? "lc-toggle-active" : "lc-toggle-inactive"} onClick={() => setConcMode("massVol")}>Mass/Vol</button>
+            </div>
+          </div>
+          {concMode === "molar" && <InputRow label="Molecular Weight" value={mw} onChange={setMw} unit="g/mol" />}
+          <InputRow label="Desired Concentration" value={desiredConc} onChange={setDesiredConc}
+            unit={concMode === "molar" ? concUnit : massVolUnit}
+            units={concMode === "molar" ? CONC_MOLAR_UNITS : CONC_MASS_VOL_UNITS}
+            onUnitChange={concMode === "molar" ? setConcUnit : setMassVolUnit} />
+          <ResultBox label="Volume of Solvent" value={result()} />
+        </CalcCard>
+      );
+    }
+
+    // % w/v
+    function PercentWV() {
+      const [pct, setPct] = useState("");
+      const [vol, setVol] = useState("");
+      const [volUnit, setVolUnit] = useState("mL");
+      const result = useCallback(() => {
+        const p = parseFloat(pct), v = parseFloat(vol);
+        if (isNaN(p)||isNaN(v)||p<=0||v<=0) return null;
+        const volML = toBase(v, VOL_UNITS, volUnit) * 1000;
+        const massG = (p / 100) * volML;
+        if (massG >= 1000) { const kg = massG / 1000; return `${kg >= 100 ? kg.toFixed(1) : kg.toFixed(3)} kg`; }
+        if (massG >= 1) return `${massG >= 100 ? massG.toFixed(1) : massG.toFixed(3)} g`;
+        if (massG >= 0.001) { const mg = massG * 1000; return `${mg >= 100 ? mg.toFixed(1) : mg.toFixed(3)} mg`; }
+        const ug = massG * 1e6;
+        return `${ug >= 100 ? ug.toFixed(1) : ug.toFixed(3)} \u00b5g`;
+      }, [pct, vol, volUnit]);
+      return (
+        <CalcCard title="% w/v Solution" onClear={() => { setPct(""); setVol(""); }}>
+          <p className="lc-formula">mass (g) = (% / 100) × volume (mL)</p>
+          <InputRow label="Desired % (w/v)" value={pct} onChange={setPct} unit="%" />
+          <InputRow label="Solution Volume" value={vol} onChange={setVol} unit={volUnit} units={VOL_UNITS} onUnitChange={setVolUnit} />
+          <ResultBox label="Required Mass" value={result()} />
+        </CalcCard>
+      );
+    }
+
+    // App
+    const TABS = [
+      { id: "mass", label: "Mass from Molarity", short: "Mass" },
+      { id: "molarDil", label: "Molar Dilution", short: "Molar Dil." },
+      { id: "massVolDil", label: "Mass/Vol Dilution", short: "M/V Dil." },
+      { id: "reconst", label: "Reconstitution", short: "Reconst." },
+      { id: "pctWV", label: "% w/v", short: "% w/v" },
+    ];
+
+    function App() {
+      const [activeTab, setActiveTab] = useState("mass");
+      return (
+        <div className="lc-app">
+          <header className="lc-header">
+            <div className="lc-header-inner">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 3v11"/><path d="M15 3v11"/><path d="M6 14h12"/>
+                <path d="M6 14c-1.1 0-2 .9-2 2v2c0 1.1.9 2 2 2"/>
+                <path d="M18 14c1.1 0 2 .9 2 2v2c0 1.1-.9 2-2 2"/>
+                <circle cx="9" cy="3" r="1"/><circle cx="15" cy="3" r="1"/>
+              </svg>
+              <h1 className="lc-header-title">LabCalc</h1>
+            </div>
+          </header>
+          <nav className="lc-nav">
+            {TABS.map((t) => (
+              <button key={t.id} onClick={() => setActiveTab(t.id)}
+                className={activeTab === t.id ? "lc-tab lc-tab-active" : "lc-tab"}>
+                <span className="lc-tab-full">{t.label}</span>
+                <span className="lc-tab-short">{t.short}</span>
+              </button>
+            ))}
+          </nav>
+          <main className="lc-main">
+            {activeTab === "mass" && <MassFromMolarity />}
+            {activeTab === "molarDil" && <MolarDilution />}
+            {activeTab === "massVolDil" && <MassVolDilution />}
+            {activeTab === "reconst" && <Reconstitution />}
+            {activeTab === "pctWV" && <PercentWV />}
+          </main>
+          <footer className="lc-footer">
+            All calculations performed client-side. Verify critical values independently.
+          </footer>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js');
+    }
+  </script>
+</body>
+</html>
