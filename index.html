@@ -178,7 +178,8 @@
       color: #fafaf9;
       background: #0c0a09;
       cursor: pointer;
-      min-width: 72px;
+      width: 104px;
+      flex: none;
       outline: none;
       transition: border-color 0.12s;
     }
@@ -275,60 +276,20 @@
 </head>
 <body>
   <div id="root"></div>
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7.26.10/babel.min.js"></script>
+  <script src="calc.js"></script>
   <script type="text/babel" data-type="module">
-    const { useState, useCallback } = React;
+    const { useState } = React;
+    const { UNITS, format, massFromMolarity, dilution, reconstituteMolar, reconstituteMassVol, percentWV } = LabCalc;
+    const VERSION = "v2 · 2026-11-16";
 
-    // Unit definitions
-    const CONC_MOLAR_UNITS = [
-      { label: "M", factor: 1 },
-      { label: "mM", factor: 1e-3 },
-      { label: "\u00b5M", factor: 1e-6 },
-      { label: "nM", factor: 1e-9 },
-      { label: "pM", factor: 1e-12 },
-    ];
-    const VOL_UNITS = [
-      { label: "L", factor: 1 },
-      { label: "mL", factor: 1e-3 },
-      { label: "\u00b5L", factor: 1e-6 },
-    ];
-    const MASS_UNITS = [
-      { label: "kg", factor: 1e3 },
-      { label: "g", factor: 1 },
-      { label: "mg", factor: 1e-3 },
-      { label: "\u00b5g", factor: 1e-6 },
-      { label: "ng", factor: 1e-9 },
-    ];
-    const CONC_MASS_VOL_UNITS = [
-      { label: "g/mL", factor: 1e3 },
-      { label: "mg/mL", factor: 1 },
-      { label: "\u00b5g/mL", factor: 1e-3 },
-      { label: "ng/mL", factor: 1e-6 },
-      { label: "pg/mL", factor: 1e-9 },
-      { label: "g/L", factor: 1 },
-      { label: "mg/L", factor: 1e-3 },
-      { label: "\u00b5g/L", factor: 1e-6 },
-    ];
-
-    function toBase(value, units, unitLabel) {
-      const u = units.find((u) => u.label === unitLabel);
-      return value * (u ? u.factor : 1);
+    function stored(key, fallback) {
+      try { return localStorage.getItem(key) || fallback; } catch (e) { return fallback; }
     }
-
-    function formatResult(valueInBaseUnit, units) {
-      let chosen = units[0];
-      for (const u of units) {
-        const v = Math.abs(valueInBaseUnit / u.factor);
-        if (v >= 0.01 && v < 10000) { chosen = u; break; }
-      }
-      const val = valueInBaseUnit / chosen.factor;
-      const formatted = Math.abs(val) >= 100 ? val.toFixed(1)
-        : Math.abs(val) >= 1 ? val.toFixed(3)
-        : Math.abs(val) >= 0.01 ? val.toFixed(5)
-        : val.toExponential(3);
-      return `${formatted} ${chosen.label}`;
+    function store(key, value) {
+      try { localStorage.setItem(key, value); } catch (e) { /* private mode: not remembered */ }
     }
 
     // Reusable components
@@ -337,7 +298,7 @@
         <div className="lc-input-row">
           <label className="lc-label">{label}</label>
           <div className="lc-input-group">
-            <input type="number" value={value} onChange={(e) => onChange(e.target.value)}
+            <input type="number" inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)}
               placeholder={placeholder || "0"} className="lc-input" step="any" />
             {units ? (
               <select value={unit} onChange={(e) => onUnitChange(e.target.value)} className="lc-select">
@@ -355,7 +316,7 @@
       return (
         <div className="lc-result">
           <span className="lc-result-label">{label}</span>
-          <span className="lc-result-value">{value || "\u2014"}</span>
+          <span className="lc-result-value">{value || "—"}</span>
         </div>
       );
     }
@@ -372,6 +333,21 @@
       );
     }
 
+    function Toggle({ label, options, value, onChange }) {
+      return (
+        <div className="lc-input-row">
+          <label className="lc-label">{label}</label>
+          <div className="lc-toggle-group">
+            {options.map((o) => (
+              <button key={o.id} className={value === o.id ? "lc-toggle-active" : "lc-toggle-inactive"}
+                onClick={() => onChange(o.id)}>{o.label}</button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    const CONC_MODES = [{ id: "molar", label: "Molar" }, { id: "massVol", label: "Mass/Vol" }];
+
     // Mass from Molarity
     function MassFromMolarity() {
       const [conc, setConc] = useState("");
@@ -379,82 +355,59 @@
       const [mw, setMw] = useState("");
       const [vol, setVol] = useState("");
       const [volUnit, setVolUnit] = useState("mL");
-      const result = useCallback(() => {
-        const c = parseFloat(conc), m = parseFloat(mw), v = parseFloat(vol);
-        if (isNaN(c)||isNaN(m)||isNaN(v)||c<=0||m<=0||v<=0) return null;
-        return formatResult(toBase(c, CONC_MOLAR_UNITS, concUnit) * m * toBase(v, VOL_UNITS, volUnit), MASS_UNITS);
-      }, [conc, concUnit, mw, vol, volUnit]);
+      const g = massFromMolarity(conc, concUnit, mw, vol, volUnit);
       return (
         <CalcCard title="Mass from Molarity" onClear={() => { setConc(""); setMw(""); setVol(""); }}>
           <p className="lc-formula">mass = concentration × MW × volume</p>
-          <InputRow label="Concentration" value={conc} onChange={setConc} unit={concUnit} units={CONC_MOLAR_UNITS} onUnitChange={setConcUnit} />
+          <InputRow label="Concentration" value={conc} onChange={setConc} unit={concUnit} units={UNITS.molar} onUnitChange={setConcUnit} />
           <InputRow label="Molecular Weight" value={mw} onChange={setMw} unit="g/mol" />
-          <InputRow label="Volume" value={vol} onChange={setVol} unit={volUnit} units={VOL_UNITS} onUnitChange={setVolUnit} />
-          <ResultBox label="Required Mass" value={result()} />
+          <InputRow label="Volume" value={vol} onChange={setVol} unit={volUnit} units={UNITS.vol} onUnitChange={setVolUnit} />
+          <ResultBox label="Required Mass" value={g === null ? null : format(g, UNITS.mass)} />
         </CalcCard>
       );
     }
 
-    // Molar Dilution
-    function MolarDilution() {
-      const [stockConc, setStockConc] = useState("");
-      const [stockUnit, setStockUnit] = useState("mM");
-      const [desiredConc, setDesiredConc] = useState("");
-      const [desiredUnit, setDesiredUnit] = useState("\u00b5M");
-      const [desiredVol, setDesiredVol] = useState("");
-      const [desiredVolUnit, setDesiredVolUnit] = useState("mL");
-      const result = useCallback(() => {
-        const c1 = parseFloat(stockConc), c2 = parseFloat(desiredConc), v2 = parseFloat(desiredVol);
-        if (isNaN(c1)||isNaN(c2)||isNaN(v2)||c1<=0||c2<=0||v2<=0) return null;
-        const c1b = toBase(c1, CONC_MOLAR_UNITS, stockUnit);
-        const c2b = toBase(c2, CONC_MOLAR_UNITS, desiredUnit);
-        const v2b = toBase(v2, VOL_UNITS, desiredVolUnit);
-        if (c2b > c1b) return { error: "Desired concentration exceeds stock" };
-        const v1b = (c2b * v2b) / c1b;
-        return { stock: formatResult(v1b, VOL_UNITS), diluent: formatResult(v2b - v1b, VOL_UNITS) };
-      }, [stockConc, stockUnit, desiredConc, desiredUnit, desiredVol, desiredVolUnit]);
-      const r = result();
+    // One dilution form; the Dilution card holds a molar one and a mass/volume one and shows one at a time,
+    // so swapping back and forth keeps what was typed in each.
+    function DilutionForm({ kind, stockDefault, desiredDefault, clearKey }) {
+      const [c1, setC1] = useState("");
+      const [c1Unit, setC1Unit] = useState(stockDefault);
+      const [c2, setC2] = useState("");
+      const [c2Unit, setC2Unit] = useState(desiredDefault);
+      const [v2, setV2] = useState("");
+      const [v2Unit, setV2Unit] = useState("mL");
+      const [lastClear, setLastClear] = useState(clearKey);
+      if (clearKey !== lastClear) { setLastClear(clearKey); setC1(""); setC2(""); setV2(""); }
+      const r = dilution(kind, c1, c1Unit, c2, c2Unit, v2, v2Unit);
       return (
-        <CalcCard title="Molar Dilution (C1V1 = C2V2)" onClear={() => { setStockConc(""); setDesiredConc(""); setDesiredVol(""); }}>
-          <p className="lc-formula">V1 = (C2 × V2) / C1</p>
-          <InputRow label="Stock Concentration (C1)" value={stockConc} onChange={setStockConc} unit={stockUnit} units={CONC_MOLAR_UNITS} onUnitChange={setStockUnit} />
-          <InputRow label="Desired Concentration (C2)" value={desiredConc} onChange={setDesiredConc} unit={desiredUnit} units={CONC_MOLAR_UNITS} onUnitChange={setDesiredUnit} />
-          <InputRow label="Desired Final Volume (V2)" value={desiredVol} onChange={setDesiredVol} unit={desiredVolUnit} units={VOL_UNITS} onUnitChange={setDesiredVolUnit} />
+        <>
+          <InputRow label="Stock Concentration (C1)" value={c1} onChange={setC1} unit={c1Unit} units={UNITS[kind]} onUnitChange={setC1Unit} />
+          <InputRow label="Desired Concentration (C2)" value={c2} onChange={setC2} unit={c2Unit} units={UNITS[kind]} onUnitChange={setC2Unit} />
+          <InputRow label="Desired Final Volume (V2)" value={v2} onChange={setV2} unit={v2Unit} units={UNITS.vol} onUnitChange={setV2Unit} />
           {r && r.error ? <div className="lc-error">{r.error}</div> : (
-            <><ResultBox label="Volume of Stock (V1)" value={r?.stock} /><ResultBox label="Volume of Diluent" value={r?.diluent} /></>
+            <>
+              <ResultBox label="Volume of Stock (V1)" value={r && format(r.stock, UNITS.vol)} />
+              <ResultBox label="Volume of Diluent" value={r && format(r.diluent, UNITS.vol)} />
+            </>
           )}
-        </CalcCard>
+        </>
       );
     }
 
-    // Mass/Volume Dilution
-    function MassVolDilution() {
-      const [stockConc, setStockConc] = useState("");
-      const [stockUnit, setStockUnit] = useState("mg/mL");
-      const [finalConc, setFinalConc] = useState("");
-      const [finalUnit, setFinalUnit] = useState("\u00b5g/mL");
-      const [finalVol, setFinalVol] = useState("");
-      const [finalVolUnit, setFinalVolUnit] = useState("mL");
-      const result = useCallback(() => {
-        const c1 = parseFloat(stockConc), c2 = parseFloat(finalConc), v2 = parseFloat(finalVol);
-        if (isNaN(c1)||isNaN(c2)||isNaN(v2)||c1<=0||c2<=0||v2<=0) return null;
-        const c1b = toBase(c1, CONC_MASS_VOL_UNITS, stockUnit);
-        const c2b = toBase(c2, CONC_MASS_VOL_UNITS, finalUnit);
-        const v2b = toBase(v2, VOL_UNITS, finalVolUnit);
-        if (c2b > c1b) return { error: "Final concentration exceeds stock" };
-        const v1b = (c2b * v2b) / c1b;
-        return { stock: formatResult(v1b, VOL_UNITS), diluent: formatResult(v2b - v1b, VOL_UNITS) };
-      }, [stockConc, stockUnit, finalConc, finalUnit, finalVol, finalVolUnit]);
-      const r = result();
+    function Dilution() {
+      const [mode, setModeState] = useState(() => stored("lc-dilution-mode", "molar"));
+      const [clearKey, setClearKey] = useState(0);
+      const setMode = (m) => { setModeState(m); store("lc-dilution-mode", m); };
       return (
-        <CalcCard title="Mass/Volume Dilution" onClear={() => { setStockConc(""); setFinalConc(""); setFinalVol(""); }}>
+        <CalcCard title="Dilution (C1V1 = C2V2)" onClear={() => setClearKey((k) => k + 1)}>
           <p className="lc-formula">V1 = (C2 × V2) / C1</p>
-          <InputRow label="Stock Concentration (C1)" value={stockConc} onChange={setStockConc} unit={stockUnit} units={CONC_MASS_VOL_UNITS} onUnitChange={setStockUnit} />
-          <InputRow label="Final Concentration (C2)" value={finalConc} onChange={setFinalConc} unit={finalUnit} units={CONC_MASS_VOL_UNITS} onUnitChange={setFinalUnit} />
-          <InputRow label="Final Volume (V2)" value={finalVol} onChange={setFinalVol} unit={finalVolUnit} units={VOL_UNITS} onUnitChange={setFinalVolUnit} />
-          {r && r.error ? <div className="lc-error">{r.error}</div> : (
-            <><ResultBox label="Volume of Stock (V1)" value={r?.stock} /><ResultBox label="Volume of Diluent" value={r?.diluent} /></>
-          )}
+          <Toggle label="Concentration Type" options={CONC_MODES} value={mode} onChange={setMode} />
+          <div hidden={mode !== "molar"}>
+            <DilutionForm kind="molar" stockDefault="mM" desiredDefault={"µM"} clearKey={clearKey} />
+          </div>
+          <div hidden={mode !== "massVol"}>
+            <DilutionForm kind="massVol" stockDefault="mg/mL" desiredDefault={"µg/mL"} clearKey={clearKey} />
+          </div>
         </CalcCard>
       );
     }
@@ -468,37 +421,21 @@
       const [concUnit, setConcUnit] = useState("mM");
       const [concMode, setConcMode] = useState("molar");
       const [massVolUnit, setMassVolUnit] = useState("mg/mL");
-      const result = useCallback(() => {
-        const m = parseFloat(mass), c = parseFloat(desiredConc);
-        if (isNaN(m)||isNaN(c)||m<=0||c<=0) return null;
-        if (concMode === "molar") {
-          const mwVal = parseFloat(mw);
-          if (isNaN(mwVal)||mwVal<=0) return null;
-          const massG = toBase(m, MASS_UNITS, massUnit);
-          return formatResult(massG / (toBase(c, CONC_MOLAR_UNITS, concUnit) * mwVal), VOL_UNITS);
-        } else {
-          const massG = toBase(m, MASS_UNITS, massUnit);
-          const concBase = toBase(c, CONC_MASS_VOL_UNITS, massVolUnit);
-          return formatResult(((massG * 1000) / concBase) * 1e-3, VOL_UNITS);
-        }
-      }, [mass, massUnit, mw, desiredConc, concUnit, concMode, massVolUnit]);
+      const molar = concMode === "molar";
+      const litres = molar
+        ? reconstituteMolar(mass, massUnit, mw, desiredConc, concUnit)
+        : reconstituteMassVol(mass, massUnit, desiredConc, massVolUnit);
       return (
         <CalcCard title="Reconstitution" onClear={() => { setMass(""); setMw(""); setDesiredConc(""); }}>
-          <p className="lc-formula">volume = mass / (concentration × MW)</p>
-          <InputRow label="Mass of Compound" value={mass} onChange={setMass} unit={massUnit} units={MASS_UNITS} onUnitChange={setMassUnit} />
-          <div className="lc-input-row">
-            <label className="lc-label">Concentration Type</label>
-            <div className="lc-toggle-group">
-              <button className={concMode === "molar" ? "lc-toggle-active" : "lc-toggle-inactive"} onClick={() => setConcMode("molar")}>Molar</button>
-              <button className={concMode === "massVol" ? "lc-toggle-active" : "lc-toggle-inactive"} onClick={() => setConcMode("massVol")}>Mass/Vol</button>
-            </div>
-          </div>
-          {concMode === "molar" && <InputRow label="Molecular Weight" value={mw} onChange={setMw} unit="g/mol" />}
+          <p className="lc-formula">{molar ? "volume = mass / (concentration × MW)" : "volume = mass / concentration"}</p>
+          <InputRow label="Mass of Compound" value={mass} onChange={setMass} unit={massUnit} units={UNITS.mass} onUnitChange={setMassUnit} />
+          <Toggle label="Concentration Type" options={CONC_MODES} value={concMode} onChange={setConcMode} />
+          {molar && <InputRow label="Molecular Weight" value={mw} onChange={setMw} unit="g/mol" />}
           <InputRow label="Desired Concentration" value={desiredConc} onChange={setDesiredConc}
-            unit={concMode === "molar" ? concUnit : massVolUnit}
-            units={concMode === "molar" ? CONC_MOLAR_UNITS : CONC_MASS_VOL_UNITS}
-            onUnitChange={concMode === "molar" ? setConcUnit : setMassVolUnit} />
-          <ResultBox label="Volume of Solvent" value={result()} />
+            unit={molar ? concUnit : massVolUnit}
+            units={molar ? UNITS.molar : UNITS.massVol}
+            onUnitChange={molar ? setConcUnit : setMassVolUnit} />
+          <ResultBox label="Volume of Solvent" value={litres === null ? null : format(litres, UNITS.vol)} />
         </CalcCard>
       );
     }
@@ -508,23 +445,13 @@
       const [pct, setPct] = useState("");
       const [vol, setVol] = useState("");
       const [volUnit, setVolUnit] = useState("mL");
-      const result = useCallback(() => {
-        const p = parseFloat(pct), v = parseFloat(vol);
-        if (isNaN(p)||isNaN(v)||p<=0||v<=0) return null;
-        const volML = toBase(v, VOL_UNITS, volUnit) * 1000;
-        const massG = (p / 100) * volML;
-        if (massG >= 1000) { const kg = massG / 1000; return `${kg >= 100 ? kg.toFixed(1) : kg.toFixed(3)} kg`; }
-        if (massG >= 1) return `${massG >= 100 ? massG.toFixed(1) : massG.toFixed(3)} g`;
-        if (massG >= 0.001) { const mg = massG * 1000; return `${mg >= 100 ? mg.toFixed(1) : mg.toFixed(3)} mg`; }
-        const ug = massG * 1e6;
-        return `${ug >= 100 ? ug.toFixed(1) : ug.toFixed(3)} \u00b5g`;
-      }, [pct, vol, volUnit]);
+      const g = percentWV(pct, vol, volUnit);
       return (
         <CalcCard title="% w/v Solution" onClear={() => { setPct(""); setVol(""); }}>
           <p className="lc-formula">mass (g) = (% / 100) × volume (mL)</p>
           <InputRow label="Desired % (w/v)" value={pct} onChange={setPct} unit="%" />
-          <InputRow label="Solution Volume" value={vol} onChange={setVol} unit={volUnit} units={VOL_UNITS} onUnitChange={setVolUnit} />
-          <ResultBox label="Required Mass" value={result()} />
+          <InputRow label="Solution Volume" value={vol} onChange={setVol} unit={volUnit} units={UNITS.vol} onUnitChange={setVolUnit} />
+          <ResultBox label="Required Mass" value={g === null ? null : format(g, UNITS.mass)} />
         </CalcCard>
       );
     }
@@ -532,8 +459,7 @@
     // App
     const TABS = [
       { id: "mass", label: "Mass from Molarity", short: "Mass" },
-      { id: "molarDil", label: "Molar Dilution", short: "Molar Dil." },
-      { id: "massVolDil", label: "Mass/Vol Dilution", short: "M/V Dil." },
+      { id: "dilution", label: "Dilution", short: "Dilution" },
       { id: "reconst", label: "Reconstitution", short: "Reconst." },
       { id: "pctWV", label: "% w/v", short: "% w/v" },
     ];
@@ -564,13 +490,12 @@
           </nav>
           <main className="lc-main">
             {activeTab === "mass" && <MassFromMolarity />}
-            {activeTab === "molarDil" && <MolarDilution />}
-            {activeTab === "massVolDil" && <MassVolDilution />}
+            {activeTab === "dilution" && <Dilution />}
             {activeTab === "reconst" && <Reconstitution />}
             {activeTab === "pctWV" && <PercentWV />}
           </main>
           <footer className="lc-footer">
-            All calculations performed client-side. Verify critical values independently.
+            All calculations performed client-side. Verify critical values independently. {VERSION}
           </footer>
         </div>
       );
